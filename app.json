@@ -16,18 +16,16 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.jnu.jokshuvoting.new"
+      "bundleIdentifier": "com.jnu.jokshuvoting2"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#1a472a"
       },
-      "package": "com.jnu.jokshuvoting.new",
+      "package": "com.jnu.jokshuvoting2",
       "versionCode": 1,
       "permissions": [
-        "android.permission.CAMERA",
-        "android.permission.RECORD_AUDIO",
         "android.permission.CAMERA",
         "android.permission.RECORD_AUDIO"
       ]
