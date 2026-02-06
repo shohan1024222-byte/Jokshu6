@@ -158,7 +158,7 @@ const styles = StyleSheet.create({
   electionText: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#ffd700',
+    color: '#9C27B0',
     marginTop: 10,
   },
   formContainer: {

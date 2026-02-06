@@ -6,4 +6,5 @@ export type RootStackParamList = {
   Results: undefined;
   Admin: undefined;
   Profile: undefined;
+  Positions: undefined;
 };

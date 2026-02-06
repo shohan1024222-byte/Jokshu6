@@ -1,20 +1,55 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
   Alert,
+  Modal,
+  Platform,
 } from 'react-native';
 import { useAuth, useVoting } from '../context';
+import { IDCardScanner } from '../components/IDCardScanner';
+
+// Cross-platform alert
+const showAlert = (title: string, message: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    if (buttons && buttons.length > 1) {
+      const confirmed = window.confirm(`${title}\n\n${message}`);
+      if (confirmed && buttons[1]?.onPress) buttons[1].onPress();
+    } else {
+      window.alert(`${title}\n\n${message}`);
+    }
+  } else {
+    Alert.alert(title, message, buttons);
+  }
+};
+
+type SettingsAction = 'changeName' | 'changePassword' | null;
 
 export const ProfileScreen: React.FC = () => {
-  const { user, logout, isAdmin } = useAuth();
-  const { positions } = useVoting();
+  const { user, logout, isAdmin, updateUserName, updatePassword } = useAuth();
+  const { positions, verifyStudentId } = useVoting();
+
+  // ID scan verification
+  const [showScanner, setShowScanner] = useState(false);
+  const [pendingAction, setPendingAction] = useState<SettingsAction>(null);
+  const [isVerified, setIsVerified] = useState(false);
+
+  // Change name
+  const [showNameModal, setShowNameModal] = useState(false);
+  const [newName, setNewName] = useState('');
+
+  // Change password
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
 
   const handleLogout = () => {
-    Alert.alert(
+    showAlert(
       'লগআউট',
       'আপনি কি নিশ্চিত যে আপনি লগআউট করতে চান?',
       [
@@ -24,12 +59,86 @@ export const ProfileScreen: React.FC = () => {
     );
   };
 
-  const handleChangePassword = () => {
-    Alert.alert('Info', 'পাসওয়ার্ড পরিবর্তনের ফিচার শীঘ্রই আসছে');
+  // Start action — requires ID scan first
+  const startAction = (action: SettingsAction) => {
+    setPendingAction(action);
+    setIsVerified(false);
+    setShowScanner(true);
+  };
+
+  const handleScanSuccess = async (scannedData: string) => {
+    setShowScanner(false);
+    try {
+      const verified = await verifyStudentId(scannedData, user?.studentId || '');
+      if (verified) {
+        setIsVerified(true);
+        if (pendingAction === 'changeName') {
+          setNewName(user?.name || '');
+          setShowNameModal(true);
+        } else if (pendingAction === 'changePassword') {
+          setCurrentPassword('');
+          setNewPassword('');
+          setConfirmPassword('');
+          setShowPasswordModal(true);
+        }
+      } else {
+        showAlert('যাচাইকরণ ব্যর্থ', 'আইডি কার্ড যাচাই করা যায়নি। আপনার নিজের আইডি কার্ড স্ক্যান করুন।');
+      }
+    } catch (error) {
+      showAlert('ত্রুটি', 'আইডি যাচাইকরণে সমস্যা হয়েছে।');
+    }
+    setPendingAction(null);
+  };
+
+  const handleNameChange = async () => {
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      showAlert('ত্রুটি', 'নাম খালি রাখা যাবে না');
+      return;
+    }
+    if (trimmed.length < 2) {
+      showAlert('ত্রুটি', 'নাম কমপক্ষে ২ অক্ষরের হতে হবে');
+      return;
+    }
+    const success = await updateUserName(trimmed);
+    if (success) {
+      setShowNameModal(false);
+      setIsVerified(false);
+      showAlert('সফল! ✅', 'আপনার নাম সফলভাবে পরিবর্তন করা হয়েছে।');
+    } else {
+      showAlert('ব্যর্থ', 'নাম পরিবর্তন করতে সমস্যা হয়েছে।');
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!currentPassword.trim()) {
+      showAlert('ত্রুটি', 'বর্তমান পাসওয়ার্ড দিন');
+      return;
+    }
+    if (!newPassword.trim()) {
+      showAlert('ত্রুটি', 'নতুন পাসওয়ার্ড দিন');
+      return;
+    }
+    if (newPassword.length < 4) {
+      showAlert('ত্রুটি', 'নতুন পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      showAlert('ত্রুটি', 'নতুন পাসওয়ার্ড মিলছে না। আবার চেষ্টা করুন।');
+      return;
+    }
+    const success = await updatePassword(currentPassword, newPassword);
+    if (success) {
+      setShowPasswordModal(false);
+      setIsVerified(false);
+      showAlert('সফল! ✅', 'আপনার পাসওয়ার্ড সফলভাবে পরিবর্তন করা হয়েছে।');
+    } else {
+      showAlert('ব্যর্থ', 'বর্তমান পাসওয়ার্ড ভুল দিয়েছেন।');
+    }
   };
 
   const handleViewVotingHistory = () => {
-    Alert.alert('Info', 'ভোটিং হিস্টরির ফিচার শীঘ্রই আসছে');
+    showAlert('Info', 'ভোটিং হিস্টরির ফিচার শীঘ্রই আসছে');
   };
 
   if (!user) {
@@ -141,12 +250,21 @@ export const ProfileScreen: React.FC = () => {
       {/* Settings */}
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>সেটিংস</Text>
+
+        <TouchableOpacity style={styles.settingItem} onPress={() => startAction('changeName')}>
+          <Text style={styles.settingIcon}>✏️</Text>
+          <View style={styles.settingContent}>
+            <Text style={styles.settingTitle}>নাম পরিবর্তন</Text>
+            <Text style={styles.settingSubtitle}>আইডি কার্ড স্ক্যান করে নাম পরিবর্তন করুন</Text>
+          </View>
+          <Text style={styles.settingArrow}>›</Text>
+        </TouchableOpacity>
         
-        <TouchableOpacity style={styles.settingItem} onPress={handleChangePassword}>
+        <TouchableOpacity style={styles.settingItem} onPress={() => startAction('changePassword')}>
           <Text style={styles.settingIcon}>🔒</Text>
           <View style={styles.settingContent}>
             <Text style={styles.settingTitle}>পাসওয়ার্ড পরিবর্তন</Text>
-            <Text style={styles.settingSubtitle}>আপনার অ্যাকাউন্টের পাসওয়ার্ড পরিবর্তন করুন</Text>
+            <Text style={styles.settingSubtitle}>আইডি কার্ড স্ক্যান করে পাসওয়ার্ড পরিবর্তন করুন</Text>
           </View>
           <Text style={styles.settingArrow}>›</Text>
         </TouchableOpacity>
@@ -186,6 +304,108 @@ export const ProfileScreen: React.FC = () => {
         <Text style={styles.footerText}>Jagannath University</Text>
         <Text style={styles.footerSubtext}>Dhaka, Bangladesh</Text>
       </View>
+
+      {/* ID Card Scanner */}
+      <IDCardScanner
+        visible={showScanner}
+        onClose={() => {
+          setShowScanner(false);
+          setPendingAction(null);
+        }}
+        onScanSuccess={handleScanSuccess}
+        expectedId={user.studentId}
+      />
+
+      {/* Change Name Modal */}
+      <Modal visible={showNameModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>নাম পরিবর্তন</Text>
+            <Text style={styles.modalVerified}>✅ আইডি যাচাই সম্পন্ন</Text>
+
+            <Text style={styles.modalLabel}>নতুন নাম:</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="আপনার নতুন নাম লিখুন"
+              placeholderTextColor="#999"
+              value={newName}
+              onChangeText={setNewName}
+              autoFocus
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => {
+                  setShowNameModal(false);
+                  setIsVerified(false);
+                }}
+              >
+                <Text style={styles.modalCancelText}>বাতিল</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalSaveButton} onPress={handleNameChange}>
+                <Text style={styles.modalSaveText}>সংরক্ষণ করুন</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Change Password Modal */}
+      <Modal visible={showPasswordModal} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContainer}>
+            <Text style={styles.modalTitle}>পাসওয়ার্ড পরিবর্তন</Text>
+            <Text style={styles.modalVerified}>✅ আইডি যাচাই সম্পন্ন</Text>
+
+            <Text style={styles.modalLabel}>বর্তমান পাসওয়ার্ড:</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="বর্তমান পাসওয়ার্ড লিখুন"
+              placeholderTextColor="#999"
+              value={currentPassword}
+              onChangeText={setCurrentPassword}
+              secureTextEntry
+              autoFocus
+            />
+
+            <Text style={styles.modalLabel}>নতুন পাসওয়ার্ড:</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="নতুন পাসওয়ার্ড লিখুন"
+              placeholderTextColor="#999"
+              value={newPassword}
+              onChangeText={setNewPassword}
+              secureTextEntry
+            />
+
+            <Text style={styles.modalLabel}>নতুন পাসওয়ার্ড নিশ্চিত করুন:</Text>
+            <TextInput
+              style={styles.modalInput}
+              placeholder="নতুন পাসওয়ার্ড আবার লিখুন"
+              placeholderTextColor="#999"
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              secureTextEntry
+            />
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={styles.modalCancelButton}
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setIsVerified(false);
+                }}
+              >
+                <Text style={styles.modalCancelText}>বাতিল</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalSaveButton} onPress={handlePasswordChange}>
+                <Text style={styles.modalSaveText}>পরিবর্তন করুন</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </ScrollView>
   );
 };
@@ -444,5 +664,82 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 5,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 8,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  modalVerified: {
+    fontSize: 14,
+    color: '#4CAF50',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  modalLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 6,
+    marginTop: 12,
+  },
+  modalInput: {
+    borderWidth: 1.5,
+    borderColor: '#ddd',
+    borderRadius: 12,
+    padding: 14,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    marginTop: 24,
+    gap: 12,
+  },
+  modalCancelButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#ddd',
+    alignItems: 'center',
+  },
+  modalCancelText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#666',
+  },
+  modalSaveButton: {
+    flex: 1,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: '#1a472a',
+    alignItems: 'center',
+  },
+  modalSaveText: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: 'white',
   },
 });

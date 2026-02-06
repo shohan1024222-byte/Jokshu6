@@ -10,6 +10,7 @@ import {
   ResultsScreen,
   AdminScreen,
   ProfileScreen,
+  PositionsScreen,
 } from '../screens';
 import { RootStackParamList } from './types';
 
@@ -86,6 +87,14 @@ export const AppNavigator: React.FC = () => {
               component={ProfileScreen}
               options={{
                 title: 'প্রোফাইল সেটিংস',
+                headerBackTitle: 'Back',
+              }}
+            />
+            <Stack.Screen
+              name="Positions"
+              component={PositionsScreen}
+              options={{
+                title: 'পদসমূহ',
                 headerBackTitle: 'Back',
               }}
             />

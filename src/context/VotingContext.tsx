@@ -10,6 +10,9 @@ interface VotingProviderProps {
   children: ReactNode;
 }
 
+// Increment this version whenever CANDIDATES data in mockData.ts is updated
+const CANDIDATES_DATA_VERSION = '6';
+
 export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
   const { user } = useAuth();
   const [candidates, setCandidates] = useState<Candidate[]>(CANDIDATES);
@@ -29,6 +32,14 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
 
   const loadCandidatesFromStorage = async () => {
     try {
+      const storedVersion = await AsyncStorage.getItem('candidatesDataVersion');
+      if (storedVersion !== CANDIDATES_DATA_VERSION) {
+        // Data version changed, use fresh mock data and clear old cache
+        await AsyncStorage.setItem('candidates', JSON.stringify(CANDIDATES));
+        await AsyncStorage.setItem('candidatesDataVersion', CANDIDATES_DATA_VERSION);
+        setCandidates(CANDIDATES);
+        return;
+      }
       const storedCandidates = await AsyncStorage.getItem('candidates');
       if (storedCandidates) {
         setCandidates(JSON.parse(storedCandidates));
@@ -118,9 +129,11 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
 
   // Verify student ID for voting - just checks if ID matches, allows entry anytime
   const verifyStudentId = async (scannedId: string, expectedId: string): Promise<boolean> => {
+    // Admin's QR code is B210305051 (app developer)
+    const actualExpectedId = expectedId === 'admin' ? 'B210305051' : expectedId;
     // Extract last 9 digits from both IDs for comparison
     const scannedLast9 = scannedId.slice(-9);
-    const expectedLast9 = expectedId.slice(-9);
+    const expectedLast9 = actualExpectedId.slice(-9);
     
     console.log('Verifying ID:', {
       scanned: scannedId,

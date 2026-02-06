@@ -5,3 +5,4 @@ export { CandidatesScreen } from './CandidatesScreen';
 export { ResultsScreen } from './ResultsScreen';
 export { AdminScreen } from './AdminScreen';
 export { ProfileScreen } from './ProfileScreen';
+export { PositionsScreen } from './PositionsScreen';

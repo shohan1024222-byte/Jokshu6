@@ -70,7 +70,7 @@ export const HomeScreen: React.FC = () => {
             <Text style={styles.userInfo}>{user?.department}</Text>
           </View>
           <TouchableOpacity onPress={handleLogout} style={styles.logoutBtn}>
-            <Text style={styles.logoutText}>🚪</Text>
+            <Text style={styles.logoutText}>Logout</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -102,14 +102,16 @@ export const HomeScreen: React.FC = () => {
         <Text style={styles.sectionTitle}>দ্রুত অ্যাক্সেস</Text>
         
         <View style={styles.actionGrid}>
-          <TouchableOpacity
-            style={[styles.actionCard, styles.voteCard]}
-            onPress={handleVoteClick}
-          >
-            <Text style={styles.actionIcon}>🗳️</Text>
-            <Text style={styles.actionText}>ভোট দিন</Text>
-            <Text style={styles.actionSubtext}>Vote Now</Text>
-          </TouchableOpacity>
+          {!isAdmin && (
+            <TouchableOpacity
+              style={[styles.actionCard, styles.voteCard]}
+              onPress={handleVoteClick}
+            >
+              <Text style={styles.actionIcon}>🗳️</Text>
+              <Text style={styles.actionText}>ভোট দিন</Text>
+              <Text style={styles.actionSubtext}>Vote Now</Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={[styles.actionCard, styles.candidatesCard]}
@@ -118,6 +120,15 @@ export const HomeScreen: React.FC = () => {
             <Text style={styles.actionIcon}>👥</Text>
             <Text style={styles.actionText}>প্রার্থী</Text>
             <Text style={styles.actionSubtext}>Candidates</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.actionCard, styles.positionsCard]}
+            onPress={() => navigation.navigate('Positions')}
+          >
+            <Text style={styles.actionIcon}>📋</Text>
+            <Text style={styles.actionText}>পদসমূহ</Text>
+            <Text style={styles.actionSubtext}>Positions</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -207,12 +218,17 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
   },
   logoutBtn: {
-    padding: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 25,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: 'rgba(255,255,255,0.4)',
   },
   logoutText: {
-    fontSize: 20,
+    fontSize: 13,
+    color: 'white',
+    fontWeight: 'bold',
   },
   statusCard: {
     backgroundColor: 'white',
@@ -318,6 +334,10 @@ const styles = StyleSheet.create({
   adminCard: {
     borderLeftWidth: 4,
     borderLeftColor: '#9C27B0',
+  },
+  positionsCard: {
+    borderLeftWidth: 4,
+    borderLeftColor: '#009688',
   },
   actionIcon: {
     fontSize: 30,

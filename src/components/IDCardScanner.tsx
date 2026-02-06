@@ -5,10 +5,10 @@ import {
   StyleSheet,
   Modal,
   TouchableOpacity,
-  Alert,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
-import { Camera } from 'expo-camera';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 
 interface IDCardScannerProps {
   visible: boolean;
@@ -23,72 +23,107 @@ export const IDCardScanner: React.FC<IDCardScannerProps> = ({
   onScanSuccess,
   expectedId,
 }) => {
-  const [hasPermission, setHasPermission] = useState<boolean | null>(null);
+  const [permission, requestPermission] = useCameraPermissions();
+  const [scanned, setScanned] = useState(false);
+  const [scanSuccess, setScanSuccess] = useState(false);
+  const [scannedValue, setScannedValue] = useState('');
 
+  // Reset state when modal opens
   React.useEffect(() => {
     if (visible) {
-      requestCameraPermission();
+      setScanned(false);
+      setScanSuccess(false);
+      setScannedValue('');
+      if (!permission?.granted) {
+        requestPermission();
+      }
     }
   }, [visible]);
 
-  const requestCameraPermission = async () => {
-    const { status } = await Camera.requestCameraPermissionsAsync();
-    setHasPermission(status === 'granted');
+  const extractStudentId = (data: string): string => {
+    // Try to parse as JSON first (some QR codes contain JSON)
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed.studentId) return parsed.studentId;
+      if (parsed.id) return parsed.id;
+      if (parsed.student_id) return parsed.student_id;
+    } catch (e) {
+      // Not JSON, continue
+    }
+
+    // Check if it's a URL with query params
+    if (data.includes('?')) {
+      try {
+        const params = new URLSearchParams(data.split('?')[1]);
+        const id = params.get('studentId') || params.get('id') || params.get('student_id');
+        if (id) return id;
+      } catch (e) {
+        // Not a valid URL
+      }
+    }
+
+    // Return the raw data (it might be just the student ID)
+    return data.trim();
   };
 
-  const handleManualEntry = () => {
-    // For demo purposes, automatically use the expected ID
-    Alert.alert(
-      'Manual Entry',
-      `আপনার Student ID: ${expectedId}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Verify', 
-          onPress: () => {
-            onScanSuccess(expectedId);
-          }
-        }
-      ]
-    );
+  const handleBarcodeScanned = ({ data }: { data: string }) => {
+    if (scanned) return; // Prevent multiple scans
+    setScanned(true);
+
+    console.log('QR Scanned raw data:', data);
+    const extractedId = extractStudentId(data);
+    console.log('Extracted student ID:', extractedId);
+
+    setScannedValue(extractedId);
+    setScanSuccess(true);
+
+    // Short delay to show success feedback
+    setTimeout(() => {
+      onScanSuccess(extractedId);
+    }, 800);
   };
 
-  const handleBarCodeScanned = ({ data }: { data: string }) => {
-    console.log('Scanned data:', data);
-    onScanSuccess(data);
+  const handleRetry = () => {
+    setScanned(false);
+    setScanSuccess(false);
+    setScannedValue('');
   };
 
   if (!visible) return null;
 
-  if (hasPermission === null) {
+  // Permission loading
+  if (!permission) {
     return (
       <Modal visible={visible} animationType="slide">
         <View style={styles.centeredView}>
-          <Text>Requesting camera permission...</Text>
+          <ActivityIndicator size="large" color="#1a472a" />
+          <Text style={styles.loadingText}>ক্যামেরা পারমিশন চেক হচ্ছে...</Text>
         </View>
       </Modal>
     );
   }
 
-  if (hasPermission === false) {
+  // Camera not granted yet
+  if (!permission.granted) {
     return (
       <Modal visible={visible} animationType="slide">
         <View style={styles.centeredView}>
-          <Text style={styles.title}>আইডি কার্ড যাচাইকরণ</Text>
+          <Text style={styles.titleDark}>আইডি কার্ড যাচাইকরণ</Text>
           <Text style={styles.message}>
-            ক্যামেরা অ্যাক্সেস প্রয়োজন আইডি কার্ড স্ক্যান করার জন্য
+            আইডি কার্ড স্ক্যান করতে ক্যামেরা অ্যাক্সেস দিন
           </Text>
-          <TouchableOpacity style={styles.button} onPress={handleManualEntry}>
-            <Text style={styles.buttonText}>ম্যানুয়াল এন্ট্রি</Text>
+          <TouchableOpacity style={styles.button} onPress={requestPermission}>
+            <Text style={styles.buttonText}>📷 ক্যামেরা অনুমতি দিন</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-            <Text style={styles.closeButtonText}>বন্ধ করুন</Text>
+          <TouchableOpacity style={styles.closeButtonCenter} onPress={onClose}>
+            <Text style={styles.closeButtonCenterText}>বন্ধ করুন</Text>
           </TouchableOpacity>
         </View>
       </Modal>
     );
   }
 
+  // Camera scanner view
   return (
     <Modal visible={visible} animationType="slide">
       <View style={styles.container}>
@@ -99,34 +134,45 @@ export const IDCardScanner: React.FC<IDCardScannerProps> = ({
           </TouchableOpacity>
         </View>
 
-        {Platform.OS !== 'web' ? (
-          <Camera
-            style={styles.camera}
-            onBarCodeScanned={handleBarCodeScanned}
-            barCodeScannerSettings={{
-              barCodeTypes: ['qr'],
-            }}
-          >
-            <View style={styles.overlay}>
-              <View style={styles.scanFrame} />
+        <CameraView
+          style={styles.camera}
+          facing="back"
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr'],
+          }}
+          onBarcodeScanned={scanned ? undefined : handleBarcodeScanned}
+        >
+          <View style={styles.overlay}>
+            {/* Corner markers for scan frame */}
+            <View style={styles.scanFrameContainer}>
+              <View style={styles.scanFrame}>
+                <View style={[styles.corner, styles.cornerTL]} />
+                <View style={[styles.corner, styles.cornerTR]} />
+                <View style={[styles.corner, styles.cornerBL]} />
+                <View style={[styles.corner, styles.cornerBR]} />
+              </View>
+            </View>
+
+            {scanSuccess ? (
+              <View style={styles.successOverlay}>
+                <Text style={styles.successIcon}>✅</Text>
+                <Text style={styles.successText}>স্ক্যান সফল!</Text>
+                <Text style={styles.scannedIdText}>ID: {scannedValue}</Text>
+              </View>
+            ) : (
               <Text style={styles.instruction}>
                 আপনার আইডি কার্ডের QR কোড ফ্রেমের মধ্যে রাখুন
               </Text>
-            </View>
-          </Camera>
-        ) : (
-          <View style={styles.webFallback}>
-            <Text style={styles.webText}>ওয়েব ভার্সনে ক্যামেরা স্ক্যানিং উপলব্ধ নেই</Text>
-            <TouchableOpacity style={styles.button} onPress={handleManualEntry}>
-              <Text style={styles.buttonText}>ম্যানুয়াল এন্ট্রি</Text>
-            </TouchableOpacity>
+            )}
           </View>
-        )}
+        </CameraView>
 
         <View style={styles.footer}>
-          <TouchableOpacity style={styles.manualButton} onPress={handleManualEntry}>
-            <Text style={styles.manualButtonText}>ম্যানুয়াল এন্ট্রি</Text>
-          </TouchableOpacity>
+          {scanned && !scanSuccess && (
+            <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
+              <Text style={styles.retryButtonText}>🔄 আবার স্ক্যান করুন</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </Modal>
@@ -144,55 +190,125 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
     paddingTop: 50,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.7)',
   },
   title: {
     fontSize: 18,
     fontWeight: 'bold',
     color: 'white',
   },
+  titleDark: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#1a472a',
+    marginBottom: 10,
+  },
   closeButton: {
     padding: 10,
   },
   closeButtonText: {
-    fontSize: 18,
+    fontSize: 22,
     color: 'white',
+    fontWeight: 'bold',
   },
   camera: {
     flex: 1,
   },
   overlay: {
     flex: 1,
-    backgroundColor: 'transparent',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  scanFrameContainer: {
     justifyContent: 'center',
     alignItems: 'center',
   },
   scanFrame: {
-    width: 250,
-    height: 250,
-    borderWidth: 2,
-    borderColor: '#fff',
-    borderRadius: 10,
+    width: 260,
+    height: 260,
+    position: 'relative',
     backgroundColor: 'transparent',
+  },
+  corner: {
+    position: 'absolute',
+    width: 40,
+    height: 40,
+    borderColor: '#4CAF50',
+    borderWidth: 4,
+  },
+  cornerTL: {
+    top: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderBottomWidth: 0,
+    borderTopLeftRadius: 12,
+  },
+  cornerTR: {
+    top: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderBottomWidth: 0,
+    borderTopRightRadius: 12,
+  },
+  cornerBL: {
+    bottom: 0,
+    left: 0,
+    borderRightWidth: 0,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 12,
+  },
+  cornerBR: {
+    bottom: 0,
+    right: 0,
+    borderLeftWidth: 0,
+    borderTopWidth: 0,
+    borderBottomRightRadius: 12,
+  },
+  successOverlay: {
+    marginTop: 20,
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 20,
+    borderRadius: 12,
+  },
+  successIcon: {
+    fontSize: 48,
+    marginBottom: 10,
+  },
+  successText: {
+    color: '#4CAF50',
+    fontSize: 20,
+    fontWeight: 'bold',
+  },
+  scannedIdText: {
+    color: 'white',
+    fontSize: 16,
+    marginTop: 8,
   },
   instruction: {
     color: 'white',
     fontSize: 16,
     textAlign: 'center',
-    marginTop: 20,
+    marginTop: 24,
     paddingHorizontal: 20,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    padding: 12,
+    borderRadius: 8,
   },
   footer: {
     padding: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    paddingBottom: 30,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    gap: 10,
   },
-  manualButton: {
-    backgroundColor: '#1a472a',
+  retryButton: {
+    backgroundColor: '#FF9800',
     padding: 15,
     borderRadius: 10,
     alignItems: 'center',
   },
-  manualButtonText: {
+  retryButtonText: {
     color: 'white',
     fontSize: 16,
     fontWeight: 'bold',
@@ -202,37 +318,39 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: '#f5f5f5',
-    padding: 20,
+    padding: 24,
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
   },
   message: {
     fontSize: 16,
     textAlign: 'center',
     marginVertical: 20,
-    color: '#333',
+    color: '#555',
+    lineHeight: 24,
   },
   button: {
     backgroundColor: '#1a472a',
-    padding: 15,
-    borderRadius: 10,
-    marginVertical: 10,
-    minWidth: 200,
+    padding: 16,
+    borderRadius: 12,
+    marginVertical: 8,
+    minWidth: 250,
     alignItems: 'center',
   },
   buttonText: {
     color: 'white',
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: 'bold',
   },
-  webFallback: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#f5f5f5',
+  closeButtonCenter: {
+    marginTop: 20,
+    padding: 12,
   },
-  webText: {
-    fontSize: 18,
-    color: '#333',
-    textAlign: 'center',
-    marginBottom: 20,
+  closeButtonCenterText: {
+    color: '#999',
+    fontSize: 16,
   },
 });
