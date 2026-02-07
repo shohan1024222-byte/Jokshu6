@@ -1,8 +1,12 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FirebaseStorage } from '../firebase';
 import { Candidate, Position, PositionInfo, ElectionState, VotingContextType } from '../types';
 import { CANDIDATES, POSITIONS } from '../data/mockData';
 import { useAuth } from './AuthContext';
+
+// Firebase cloud storage ব্যবহার করা হচ্ছে - app uninstall করলেও data থাকবে
+const Storage = FirebaseStorage;
 
 const VotingContext = createContext<VotingContextType | undefined>(undefined);
 
@@ -32,15 +36,15 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
 
   const loadCandidatesFromStorage = async () => {
     try {
-      const storedVersion = await AsyncStorage.getItem('candidatesDataVersion');
+      const storedVersion = await Storage.getItem('candidatesDataVersion');
       if (storedVersion !== CANDIDATES_DATA_VERSION) {
         // Data version changed, use fresh mock data and clear old cache
-        await AsyncStorage.setItem('candidates', JSON.stringify(CANDIDATES));
-        await AsyncStorage.setItem('candidatesDataVersion', CANDIDATES_DATA_VERSION);
+        await Storage.setItem('candidates', JSON.stringify(CANDIDATES));
+        await Storage.setItem('candidatesDataVersion', CANDIDATES_DATA_VERSION);
         setCandidates(CANDIDATES);
         return;
       }
-      const storedCandidates = await AsyncStorage.getItem('candidates');
+      const storedCandidates = await Storage.getItem('candidates');
       if (storedCandidates) {
         setCandidates(JSON.parse(storedCandidates));
       }
@@ -51,7 +55,7 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
 
   const loadElectionState = async () => {
     try {
-      const storedState = await AsyncStorage.getItem('electionState');
+      const storedState = await Storage.getItem('electionState');
       if (storedState) {
         setElectionState(JSON.parse(storedState));
       }
@@ -62,7 +66,7 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
 
   const saveCandidates = async (updatedCandidates: Candidate[]) => {
     try {
-      await AsyncStorage.setItem('candidates', JSON.stringify(updatedCandidates));
+      await Storage.setItem('candidates', JSON.stringify(updatedCandidates));
       setCandidates(updatedCandidates);
     } catch (error) {
       console.error('Error saving candidates:', error);
@@ -170,7 +174,7 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
       }
 
       // Check global voting record to prevent duplicate voting
-      const globalVotingRecord = await AsyncStorage.getItem('globalVotingRecord');
+      const globalVotingRecord = await Storage.getItem('globalVotingRecord');
       const votingRecord = globalVotingRecord ? JSON.parse(globalVotingRecord) : {};
 
       if (votingRecord[user.studentId]?.hasCompletedVoting) {
@@ -185,7 +189,7 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
       }
 
       // Check if user already voted for this position
-      const storedVotingData = await AsyncStorage.getItem(`voter_${user.studentId}`);
+      const storedVotingData = await Storage.getItem(`voter_${user.studentId}`);
       const votingData = storedVotingData ? JSON.parse(storedVotingData) : { votedPositions: [] };
 
       if (votingData.votedPositions.includes(position)) {
@@ -206,7 +210,7 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
       // Update user voting record
       votingData.votedPositions.push(position);
       votingData.hasVoted = votingData.votedPositions.length === positions.length;
-      await AsyncStorage.setItem(`voter_${user.studentId}`, JSON.stringify(votingData));
+      await Storage.setItem(`voter_${user.studentId}`, JSON.stringify(votingData));
 
       // Update global voting record to prevent reuse of this ID
       votingRecord[user.studentId] = {
@@ -214,7 +218,7 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
         positions: votingData.votedPositions,
         hasCompletedVoting: votingData.hasVoted
       };
-      await AsyncStorage.setItem('globalVotingRecord', JSON.stringify(votingRecord));
+      await Storage.setItem('globalVotingRecord', JSON.stringify(votingRecord));
 
       // If user has completed all voting, remove from verified list
       if (votingData.hasVoted) {
@@ -231,7 +235,7 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
         votedCount: electionState.votedCount + 1,
       };
       setElectionState(newState);
-      await AsyncStorage.setItem('electionState', JSON.stringify(newState));
+      await Storage.setItem('electionState', JSON.stringify(newState));
 
       return true;
     } catch (error) {

@@ -1,7 +1,11 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+﻿import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FirebaseStorage } from '../firebase';
 import { Student, AuthContextType } from '../types';
 import { STUDENTS, PASSWORDS } from '../data/mockData';
+
+// Firebase cloud storage - app uninstall korleo data thakbe
+const Storage = FirebaseStorage;
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -19,7 +23,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const loadUserFromStorage = async () => {
     try {
-      const storedUser = await AsyncStorage.getItem('currentUser');
+      const storedUser = await Storage.getItem('currentUser');
       if (storedUser) {
         const parsedUser = JSON.parse(storedUser);
         setUser(parsedUser);
@@ -39,7 +43,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // First check if there's a custom password for this user
       let storedPassword;
       try {
-        const customPasswordsData = await AsyncStorage.getItem('customPasswords');
+        const customPasswordsData = await Storage.getItem('customPasswords');
         const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
         storedPassword = customPasswords[studentId] || PASSWORDS[studentId];
       } catch (e) {
@@ -52,7 +56,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Check if there's a custom user data
         let foundStudent;
         try {
-          const customUsersData = await AsyncStorage.getItem('customUsers');
+          const customUsersData = await Storage.getItem('customUsers');
           const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
           foundStudent = customUsers[studentId] || STUDENTS.find(s => s.studentId === studentId);
         } catch (e) {
@@ -65,7 +69,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Load any stored voting data
           let userWithVotingData = { ...foundStudent };
           try {
-            const storedVotingData = await AsyncStorage.getItem(`voter_${studentId}`);
+            const storedVotingData = await Storage.getItem(`voter_${studentId}`);
             if (storedVotingData) {
               userWithVotingData = { ...foundStudent, ...JSON.parse(storedVotingData) };
             }
@@ -78,7 +82,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setIsAuthenticated(true);
           
           try {
-            await AsyncStorage.setItem('currentUser', JSON.stringify(userWithVotingData));
+            await Storage.setItem('currentUser', JSON.stringify(userWithVotingData));
           } catch (e) {
             console.log('Could not save to storage');
           }
@@ -97,7 +101,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = async () => {
     try {
-      await AsyncStorage.removeItem('currentUser');
+      await Storage.removeItem('currentUser');
       setUser(null);
       setIsAuthenticated(false);
     } catch (error) {
@@ -110,13 +114,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       const updatedUser = { ...user, name: newName };
       setUser(updatedUser);
-      await AsyncStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      await Storage.setItem('currentUser', JSON.stringify(updatedUser));
 
       // Save custom user data
-      const customUsersData = await AsyncStorage.getItem('customUsers');
+      const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
       customUsers[user.studentId] = updatedUser;
-      await AsyncStorage.setItem('customUsers', JSON.stringify(customUsers));
+      await Storage.setItem('customUsers', JSON.stringify(customUsers));
 
       return true;
     } catch (error) {
@@ -130,7 +134,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // Verify current password
       let storedPassword;
-      const customPasswordsData = await AsyncStorage.getItem('customPasswords');
+      const customPasswordsData = await Storage.getItem('customPasswords');
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
       storedPassword = customPasswords[user.studentId] || PASSWORDS[user.studentId];
 
@@ -140,7 +144,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Save new password
       customPasswords[user.studentId] = newPassword;
-      await AsyncStorage.setItem('customPasswords', JSON.stringify(customPasswords));
+      await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
 
       return true;
     } catch (error) {
@@ -153,7 +157,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       // Check if student already exists
       const existingStudent = STUDENTS.find(s => s.studentId === studentId);
-      const customUsersData = await AsyncStorage.getItem('customUsers');
+      const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
       
       if (existingStudent || customUsers[studentId]) {
@@ -173,13 +177,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Save to customUsers
       customUsers[studentId] = newStudent;
-      await AsyncStorage.setItem('customUsers', JSON.stringify(customUsers));
+      await Storage.setItem('customUsers', JSON.stringify(customUsers));
 
       // Save password
-      const customPasswordsData = await AsyncStorage.getItem('customPasswords');
+      const customPasswordsData = await Storage.getItem('customPasswords');
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
       customPasswords[studentId] = password;
-      await AsyncStorage.setItem('customPasswords', JSON.stringify(customPasswords));
+      await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
 
       return true;
     } catch (error) {
@@ -190,14 +194,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const getRegisteredStudents = async (): Promise<Array<{ studentId: string; name: string; department: string; session: string }>> => {
     try {
-      const customUsersData = await AsyncStorage.getItem('customUsers');
+      const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
       
       // Combine mock students + custom students
       const allStudents: Array<{ studentId: string; name: string; department: string; session: string }> = [];
       
       // Get removed students list
-      const removedData = await AsyncStorage.getItem('removedStudents');
+      const removedData = await Storage.getItem('removedStudents');
       const removedStudents: string[] = removedData ? JSON.parse(removedData) : [];
 
       // Add mock students (excluding admin and removed ones)
@@ -229,23 +233,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const removeStudent = async (studentId: string): Promise<boolean> => {
     try {
       // Remove from customUsers
-      const customUsersData = await AsyncStorage.getItem('customUsers');
+      const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
       delete customUsers[studentId];
-      await AsyncStorage.setItem('customUsers', JSON.stringify(customUsers));
+      await Storage.setItem('customUsers', JSON.stringify(customUsers));
 
       // Remove password
-      const customPasswordsData = await AsyncStorage.getItem('customPasswords');
+      const customPasswordsData = await Storage.getItem('customPasswords');
       const customPasswords = customPasswordsData ? JSON.parse(customPasswordsData) : {};
       delete customPasswords[studentId];
-      await AsyncStorage.setItem('customPasswords', JSON.stringify(customPasswords));
+      await Storage.setItem('customPasswords', JSON.stringify(customPasswords));
 
       // Track removed mock students so they don't reappear
-      const removedData = await AsyncStorage.getItem('removedStudents');
+      const removedData = await Storage.getItem('removedStudents');
       const removedStudents: string[] = removedData ? JSON.parse(removedData) : [];
       if (!removedStudents.includes(studentId)) {
         removedStudents.push(studentId);
-        await AsyncStorage.setItem('removedStudents', JSON.stringify(removedStudents));
+        await Storage.setItem('removedStudents', JSON.stringify(removedStudents));
       }
 
       return true;
@@ -257,7 +261,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const updateStudent = async (studentId: string, name: string, department: string, session: string): Promise<boolean> => {
     try {
-      const customUsersData = await AsyncStorage.getItem('customUsers');
+      const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
 
       // Find existing student data (could be mock or custom)
@@ -279,7 +283,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         };
       }
 
-      await AsyncStorage.setItem('customUsers', JSON.stringify(customUsers));
+      await Storage.setItem('customUsers', JSON.stringify(customUsers));
       return true;
     } catch (error) {
       console.error('Error updating student:', error);

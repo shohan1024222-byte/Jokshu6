@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,8 +11,10 @@ import {
 } from 'react-native';
 import { useVoting, useAuth } from '../context';
 import { Position, Candidate } from '../types';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FirebaseStorage } from '../firebase';
 import { IDCardScanner } from '../components/IDCardScanner';
+
+const Storage = FirebaseStorage;
 
 // Custom alert function for web compatibility
 const showAlert = (title: string, message: string, buttons?: any[]) => {
@@ -47,7 +49,7 @@ export const VotingScreen: React.FC = () => {
   const loadVotedPositions = async () => {
     if (user) {
       try {
-        const storedData = await AsyncStorage.getItem(`voter_${user.studentId}`);
+        const storedData = await Storage.getItem(`voter_${user.studentId}`);
         if (storedData) {
           const data = JSON.parse(storedData);
           setVotedPositions(data.votedPositions || []);
@@ -60,7 +62,7 @@ export const VotingScreen: React.FC = () => {
 
   const handleCandidateSelect = (candidateId: string, position: Position) => {
     if (votedPositions.includes(position)) {
-      showAlert('ভোট দেওয়া হয়েছে', 'আপনি এই পদের জন্য ইতিমধ্যে ভোট দিয়েছেন।');
+      showAlert('\u09ad\u09cb\u099f \u09a6\u09c7\u0993\u09af\u09bc\u09be \u09b9\u09af\u09bc\u09c7\u099b\u09c7', '\u0986\u09aa\u09a8\u09bf \u098f\u0987 \u09aa\u09a6\u09c7\u09b0 \u099c\u09a8\u09cd\u09af \u0987\u09a4\u09bf\u09ae\u09a7\u09cd\u09af\u09c7 \u09ad\u09cb\u099f \u09a6\u09bf\u09af\u09bc\u09c7\u099b\u09c7\u09a8\u0964');
       return;
     }
 
@@ -73,11 +75,11 @@ export const VotingScreen: React.FC = () => {
 
     // Verify vote
     showAlert(
-      'ভোট নিশ্চিত করুন',
-      `আপনি কি ${positions.find(p => p.id === position)?.titleBn} পদের জন্য এই প্রার্থীকে ভোট দিতে চান?`,
+      '\u09ad\u09cb\u099f \u09a8\u09bf\u09b6\u09cd\u099a\u09bf\u09a4 \u0995\u09b0\u09c1\u09a8',
+      `\u0986\u09aa\u09a8\u09bf \u0995\u09bf ${positions.find(p => p.id === position)?.titleBn} \u09aa\u09a6\u09c7\u09b0 \u099c\u09a8\u09cd\u09af \u098f\u0987 \u09aa\u09cd\u09b0\u09be\u09b0\u09cd\u09a5\u09c0\u0995\u09c7 \u09ad\u09cb\u099f \u09a6\u09bf\u09a4\u09c7 \u099a\u09be\u09a8?`,
       [
-        { text: 'না', style: 'cancel' },
-        { text: 'হ্যাঁ', onPress: () => submitVote(candidateId, position) },
+        { text: '\u09a8\u09be', style: 'cancel' },
+        { text: '\u09b9\u09cd\u09af\u09be\u0981', onPress: () => submitVote(candidateId, position) },
       ]
     );
   };
@@ -88,20 +90,20 @@ export const VotingScreen: React.FC = () => {
       const verified = await verifyStudentId(scannedData, user?.studentId || '');
       if (verified && pendingVote) {
         showAlert(
-          'ভোট নিশ্চিত করুন',
-          `আপনি কি ${positions.find(p => p.id === pendingVote.position)?.titleBn} পদের জন্য এই প্রার্থীকে ভোট দিতে চান?`,
+          '\u09ad\u09cb\u099f \u09a8\u09bf\u09b6\u09cd\u099a\u09bf\u09a4 \u0995\u09b0\u09c1\u09a8',
+          `\u0986\u09aa\u09a8\u09bf \u0995\u09bf ${positions.find(p => p.id === pendingVote.position)?.titleBn} \u09aa\u09a6\u09c7\u09b0 \u099c\u09a8\u09cd\u09af \u098f\u0987 \u09aa\u09cd\u09b0\u09be\u09b0\u09cd\u09a5\u09c0\u0995\u09c7 \u09ad\u09cb\u099f \u09a6\u09bf\u09a4\u09c7 \u099a\u09be\u09a8?`,
           [
-            { text: 'না', style: 'cancel' },
-            { text: 'হ্যাঁ', onPress: () => submitVote(pendingVote.candidateId, pendingVote.position) },
+            { text: '\u09a8\u09be', style: 'cancel' },
+            { text: '\u09b9\u09cd\u09af\u09be\u0981', onPress: () => submitVote(pendingVote.candidateId, pendingVote.position) },
           ]
         );
         setPendingVote(null);
       } else {
-        showAlert('যাচাইকরণ ব্যর্থ', 'আইডি কার্ড যাচাই করা যায়নি। আবার চেষ্টা করুন।');
+        showAlert('\u09af\u09be\u099a\u09be\u0987\u0995\u09b0\u09a3 \u09ac\u09cd\u09af\u09b0\u09cd\u09a5', '\u0986\u0987\u09a1\u09bf \u0995\u09be\u09b0\u09cd\u09a1 \u09af\u09be\u099a\u09be\u0987 \u0995\u09b0\u09be \u09af\u09be\u09af\u09bc\u09a8\u09bf\u0964 \u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8\u0964');
         setPendingVote(null);
       }
     } catch (error) {
-      showAlert('ত্রুটি', 'আইডি যাচাইয়ে সমস্যা হয়েছে');
+      showAlert('\u09a4\u09cd\u09b0\u09c1\u099f\u09bf', '\u0986\u0987\u09a1\u09bf \u09af\u09be\u099a\u09be\u0987\u09af\u09bc\u09c7 \u09b8\u09ae\u09b8\u09cd\u09af\u09be \u09b9\u09af\u09bc\u09c7\u099b\u09c7');
       setPendingVote(null);
     }
   };
@@ -113,17 +115,17 @@ export const VotingScreen: React.FC = () => {
       if (success) {
         const updatedVotedPositions = [...votedPositions, position];
         setVotedPositions(updatedVotedPositions);
-        showAlert('সফল!', 'আপনার ভোট সফলভাবে জমা দেওয়া হয়েছে।');
+        showAlert('\u09b8\u09ab\u09b2!', '\u0986\u09aa\u09a8\u09be\u09b0 \u09ad\u09cb\u099f \u09b8\u09ab\u09b2\u09ad\u09be\u09ac\u09c7 \u099c\u09ae\u09be \u09a6\u09c7\u0993\u09af\u09bc\u09be \u09b9\u09af\u09bc\u09c7\u099b\u09c7\u0964');
         
         // Move to next position if available
         if (currentPositionIndex < positions.length - 1) {
           setCurrentPositionIndex(currentPositionIndex + 1);
         }
       } else {
-        showAlert('ব্যর্থ', 'ভোট দিতে সমস্যা হয়েছে। আবার চেষ্টা করুন।');
+        showAlert('\u09ac\u09cd\u09af\u09b0\u09cd\u09a5', '\u09ad\u09cb\u099f \u09a6\u09bf\u09a4\u09c7 \u09b8\u09ae\u09b8\u09cd\u09af\u09be \u09b9\u09af\u09bc\u09c7\u099b\u09c7\u0964 \u0986\u09ac\u09be\u09b0 \u099a\u09c7\u09b7\u09cd\u099f\u09be \u0995\u09b0\u09c1\u09a8\u0964');
       }
     } catch (error) {
-      showAlert('ত্রুটি', 'ভোট দিতে সমস্যা হয়েছে।');
+      showAlert('\u09a4\u09cd\u09b0\u09c1\u099f\u09bf', '\u09ad\u09cb\u099f \u09a6\u09bf\u09a4\u09c7 \u09b8\u09ae\u09b8\u09cd\u09af\u09be \u09b9\u09af\u09bc\u09c7\u099b\u09c7\u0964');
     } finally {
       setIsVoting(false);
     }
@@ -132,8 +134,8 @@ export const VotingScreen: React.FC = () => {
   if (!electionState.isActive) {
     return (
       <View style={styles.centerContainer}>
-        <Text style={styles.inactiveIcon}>🗳️</Text>
-        <Text style={styles.inactiveText}>নির্বাচন বর্তমানে বন্ধ</Text>
+        <Text style={styles.inactiveIcon}>{'\ud83d\uddf3\ufe0f'}</Text>
+        <Text style={styles.inactiveText}>{'\u09a8\u09bf\u09b0\u09cd\u09ac\u09be\u099a\u09a8 \u09ac\u09b0\u09cd\u09a4\u09ae\u09be\u09a8\u09c7 \u09ac\u09a8\u09cd\u09a7'}</Text>
         <Text style={styles.inactiveSubtext}>Election is currently closed</Text>
       </View>
     );
@@ -165,7 +167,7 @@ export const VotingScreen: React.FC = () => {
               >
                 {pos.id}
               </Text>
-              {votedPositions.includes(pos.id) && <Text style={styles.checkMark}>✓</Text>}
+              {votedPositions.includes(pos.id) && <Text style={styles.checkMark}>{'\u2713'}</Text>}
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -201,7 +203,7 @@ export const VotingScreen: React.FC = () => {
               </View>
               {votedPositions.includes(candidate.position) && (
                 <View style={styles.votedBadge}>
-                  <Text style={styles.votedText}>ভোট দেওয়া হয়েছে</Text>
+                  <Text style={styles.votedText}>{'\u09ad\u09cb\u099f \u09a6\u09c7\u0993\u09af\u09bc\u09be \u09b9\u09af\u09bc\u09c7\u099b\u09c7'}</Text>
                 </View>
               )}
             </View>
