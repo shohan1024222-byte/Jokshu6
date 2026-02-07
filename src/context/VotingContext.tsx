@@ -173,8 +173,14 @@ export const VotingProvider: React.FC<VotingProviderProps> = ({ children }) => {
       const globalVotingRecord = await AsyncStorage.getItem('globalVotingRecord');
       const votingRecord = globalVotingRecord ? JSON.parse(globalVotingRecord) : {};
 
-      if (votingRecord[user.studentId]) {
-        console.error('This ID has already been used to vote');
+      if (votingRecord[user.studentId]?.hasCompletedVoting) {
+        console.error('This ID has already completed all voting');
+        return false;
+      }
+
+      // Check if user already voted for this specific position via global record
+      if (votingRecord[user.studentId]?.positions?.includes(position)) {
+        console.error('This ID has already voted for this position');
         return false;
       }
 
