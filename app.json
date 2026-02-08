@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "JOKSHU Voting New",
-    "slug": "jokshu-voting-new",
+    "name": "Jokshu",
+    "slug": "Jokshu6", 
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -43,7 +43,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "866c3b95-ef37-4ef2-8dd8-f32421b2bcac"
+        "projectId": "866c3b95-ef37-4ef2-8dd8-f32421b2bcac" 
       }
     },
     "owner": "shohan2929",
