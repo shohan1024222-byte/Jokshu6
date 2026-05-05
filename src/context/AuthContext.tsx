@@ -129,6 +129,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateUserPhoneNumber = async (phoneNumber: string): Promise<boolean> => {
+    if (!user) return false;
+    try {
+      const updatedUser = { ...user, phoneNumber };
+      setUser(updatedUser);
+      await Storage.setItem('currentUser', JSON.stringify(updatedUser));
+
+      // Save custom user data so admin view and OTP flow can use latest number.
+      const customUsersData = await Storage.getItem('customUsers');
+      const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
+      const existingMock = STUDENTS.find(s => s.studentId === user.studentId);
+      const base = customUsers[user.studentId] || existingMock || updatedUser;
+      customUsers[user.studentId] = { ...base, ...updatedUser, phoneNumber };
+      await Storage.setItem('customUsers', JSON.stringify(customUsers));
+
+      return true;
+    } catch (error) {
+      console.error('Error updating phone number:', error);
+      return false;
+    }
+  };
+
   const updatePassword = async (currentPassword: string, newPassword: string): Promise<boolean> => {
     if (!user) return false;
     try {
@@ -153,7 +175,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const addStudent = async (studentId: string, name: string, password: string, department: string, session: string): Promise<boolean> => {
+  const addStudent = async (studentId: string, name: string, password: string, department: string, session: string, phoneNumber: string = ''): Promise<boolean> => {
     try {
       // Check if student already exists
       const existingStudent = STUDENTS.find(s => s.studentId === studentId);
@@ -169,6 +191,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         id: `std_${Date.now()}`,
         studentId,
         name,
+        phoneNumber,
         department,
         session,
         hasVoted: false,
@@ -192,13 +215,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const getRegisteredStudents = async (): Promise<Array<{ studentId: string; name: string; department: string; session: string }>> => {
+  const getRegisteredStudents = async (): Promise<Array<{ studentId: string; name: string; phoneNumber?: string; department: string; session: string }>> => {
     try {
       const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
       
       // Combine mock students + custom students
-      const allStudents: Array<{ studentId: string; name: string; department: string; session: string }> = [];
+      const allStudents: Array<{ studentId: string; name: string; phoneNumber?: string; department: string; session: string }> = [];
       
       // Get removed students list
       const removedData = await Storage.getItem('removedStudents');
@@ -207,7 +230,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Add mock students (excluding admin and removed ones)
       STUDENTS.forEach(s => {
         if (s.studentId !== 'admin' && !removedStudents.includes(s.studentId)) {
-          allStudents.push({ studentId: s.studentId, name: s.name, department: s.department, session: s.session });
+          allStudents.push({ studentId: s.studentId, name: s.name, phoneNumber: (s as any).phoneNumber || '', department: s.department, session: s.session });
         }
       });
 
@@ -216,9 +239,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (s.studentId !== 'admin') {
           const existingIdx = allStudents.findIndex(x => x.studentId === s.studentId);
           if (existingIdx >= 0) {
-            allStudents[existingIdx] = { studentId: s.studentId, name: s.name, department: s.department, session: s.session };
+            allStudents[existingIdx] = { studentId: s.studentId, name: s.name, phoneNumber: s.phoneNumber || '', department: s.department, session: s.session };
           } else {
-            allStudents.push({ studentId: s.studentId, name: s.name, department: s.department, session: s.session });
+            allStudents.push({ studentId: s.studentId, name: s.name, phoneNumber: s.phoneNumber || '', department: s.department, session: s.session });
           }
         }
       });
@@ -259,7 +282,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const updateStudent = async (studentId: string, name: string, department: string, session: string): Promise<boolean> => {
+  const updateStudent = async (studentId: string, name: string, department: string, session: string, phoneNumber: string = ''): Promise<boolean> => {
     try {
       const customUsersData = await Storage.getItem('customUsers');
       const customUsers = customUsersData ? JSON.parse(customUsersData) : {};
@@ -270,12 +293,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const base = existingCustom || existingMock;
 
       if (base) {
-        customUsers[studentId] = { ...base, name, department, session };
+        customUsers[studentId] = { ...base, name, department, session, phoneNumber };
       } else {
         customUsers[studentId] = {
           id: `std_${Date.now()}`,
           studentId,
           name,
+          phoneNumber,
           department,
           session,
           hasVoted: false,
@@ -294,7 +318,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const isAdmin = user?.studentId === 'admin';
 
   return (
-    <AuthContext.Provider value={{ user, isAuthenticated, isAdmin, login, logout, updateUserName, updatePassword, addStudent, getRegisteredStudents, removeStudent, updateStudent }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, isAdmin, login, logout, updateUserName, updateUserPhoneNumber, updatePassword, addStudent, getRegisteredStudents, removeStudent, updateStudent }}>
       {children}
     </AuthContext.Provider>
   );

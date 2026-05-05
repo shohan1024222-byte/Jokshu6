@@ -13,6 +13,7 @@ import {
   PositionsScreen,
 } from '../screens';
 import { RootStackParamList } from './types';
+import { Colors } from '../theme';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -24,7 +25,7 @@ export const AppNavigator: React.FC = () => {
       <Stack.Navigator
         screenOptions={{
           headerStyle: {
-            backgroundColor: '#1a472a',
+            backgroundColor: '#1E2745',
           },
           headerTintColor: '#fff',
           headerTitleStyle: {
@@ -52,7 +53,6 @@ export const AppNavigator: React.FC = () => {
               component={VotingScreen}
               options={{
                 title: 'ভোট দিন',
-                headerBackTitle: 'Back',
               }}
             />
             <Stack.Screen
@@ -60,7 +60,6 @@ export const AppNavigator: React.FC = () => {
               component={CandidatesScreen}
               options={{
                 title: 'প্রার্থী তালিকা',
-                headerBackTitle: 'Back',
               }}
             />
             <Stack.Screen
@@ -68,7 +67,6 @@ export const AppNavigator: React.FC = () => {
               component={ResultsScreen}
               options={{
                 title: 'নির্বাচনী ফলাফল',
-                headerBackTitle: 'Back',
               }}
             />
             <Stack.Screen
@@ -76,9 +74,8 @@ export const AppNavigator: React.FC = () => {
               component={AdminScreen}
               options={{
                 title: 'অ্যাডমিন প্যানেল',
-                headerBackTitle: 'Back',
                 headerStyle: {
-                  backgroundColor: '#9C27B0',
+                  backgroundColor: '#6C63FF',
                 },
               }}
             />
@@ -87,7 +84,6 @@ export const AppNavigator: React.FC = () => {
               component={ProfileScreen}
               options={{
                 title: 'প্রোফাইল সেটিংস',
-                headerBackTitle: 'Back',
               }}
             />
             <Stack.Screen
@@ -95,7 +91,6 @@ export const AppNavigator: React.FC = () => {
               component={PositionsScreen}
               options={{
                 title: 'পদসমূহ',
-                headerBackTitle: 'Back',
               }}
             />
           </>

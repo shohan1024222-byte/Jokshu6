@@ -9,9 +9,13 @@ import {
   Alert,
   Modal,
   Platform,
+  Switch,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { useVoting, useAuth } from '../context';
 import { Candidate, Position } from '../types';
+import { CameraFaceCapture } from '../components';
 
 const showAlert = (title: string, message: string, buttons?: any[]) => {
   if (Platform.OS === 'web') {
@@ -31,7 +35,26 @@ type AdminTab = 'dashboard' | 'candidates' | 'add' | 'voters';
 const SYMBOLS = ['🌟', '🔥', '⚡', '🌙', '💫', '🎯', '🤝', '📢', '📣', '❤️', '🤲', '🎭', '🎨', '⚽', '🏅', '🌍', '📚', '📖', '🏆', '🌺', '🦁', '🐅', '🦅', '⭐'];
 
 export const AdminScreen: React.FC = () => {
-  const { electionState, candidates, positions, addCandidate, updateCandidate, deleteCandidate } = useVoting();
+  const {
+    electionState,
+    candidates,
+    positions,
+    addCandidate,
+    updateCandidate,
+    deleteCandidate,
+    faceRequired,
+    setFaceRequired,
+    setStudentFace,
+    clearStudentFace,
+    getFaceEnrollmentStatus,
+    otpRequired,
+    otpRequests,
+    setOtpRequired,
+    approveVoteOtpRequest,
+    markVoteOtpAsSent,
+    rejectVoteOtpRequest,
+    clearVoteOtpRequest,
+  } = useVoting();
   const { isAdmin, addStudent, getRegisteredStudents, removeStudent, updateStudent } = useAuth();
 
   // Tab
@@ -41,15 +64,24 @@ export const AdminScreen: React.FC = () => {
   const [voterStudentId, setVoterStudentId] = useState('');
   const [voterName, setVoterName] = useState('');
   const [voterPassword, setVoterPassword] = useState('');
+  const [voterPhoneNumber, setVoterPhoneNumber] = useState('');
   const [voterDepartment, setVoterDepartment] = useState('');
   const [voterSession, setVoterSession] = useState('');
-  const [registeredStudents, setRegisteredStudents] = useState<Array<{ studentId: string; name: string; department: string; session: string }>>([]);
+  const [registeredStudents, setRegisteredStudents] = useState<Array<{ studentId: string; name: string; phoneNumber?: string; department: string; session: string }>>([]);
   const [studentsLoaded, setStudentsLoaded] = useState(false);
+  const [faceStatus, setFaceStatus] = useState<Record<string, boolean>>({});
+  const [showFaceModal, setShowFaceModal] = useState(false);
+  const [showCameraFaceCapture, setShowCameraFaceCapture] = useState(false);
+  const [selectedVoterForFace, setSelectedVoterForFace] = useState<{ studentId: string; name: string } | null>(null);
+  const [faceCode, setFaceCode] = useState('');
+  const [confirmFaceCode, setConfirmFaceCode] = useState('');
+  const [isSavingFace, setIsSavingFace] = useState(false);
 
   // Edit voter
-  const [editingVoter, setEditingVoter] = useState<{ studentId: string; name: string; department: string; session: string } | null>(null);
+  const [editingVoter, setEditingVoter] = useState<{ studentId: string; name: string; phoneNumber?: string; department: string; session: string } | null>(null);
   const [showEditVoterModal, setShowEditVoterModal] = useState(false);
   const [editVoterName, setEditVoterName] = useState('');
+  const [editVoterPhoneNumber, setEditVoterPhoneNumber] = useState('');
   const [editVoterDepartment, setEditVoterDepartment] = useState('');
   const [editVoterSession, setEditVoterSession] = useState('');
 
@@ -215,10 +247,16 @@ export const AdminScreen: React.FC = () => {
     : candidates.filter(c => c.position === filterPosition);
 
   // ---------- ADD STUDENT (VOTER) ----------
+  const loadFaceStatus = async (studentIds: string[]) => {
+    const status = await getFaceEnrollmentStatus(studentIds);
+    setFaceStatus(status);
+  };
+
   const loadStudents = async () => {
     const students = await getRegisteredStudents();
     setRegisteredStudents(students);
     setStudentsLoaded(true);
+    await loadFaceStatus(students.map((student) => student.studentId));
   };
 
   React.useEffect(() => {
@@ -231,6 +269,7 @@ export const AdminScreen: React.FC = () => {
     setVoterStudentId('');
     setVoterName('');
     setVoterPassword('');
+    setVoterPhoneNumber('');
     setVoterDepartment('');
     setVoterSession('');
   };
@@ -239,6 +278,7 @@ export const AdminScreen: React.FC = () => {
     if (!voterStudentId.trim()) return showAlert('ত্রুটি', 'Student ID দিন');
     if (!voterName.trim()) return showAlert('ত্রুটি', 'ছাত্র/ছাত্রীর নাম দিন');
     if (!voterPassword.trim()) return showAlert('ত্রুটি', 'পাসওয়ার্ড দিন');
+    if (!voterPhoneNumber.trim()) return showAlert('ত্রুটি', 'Phone number দিন (OTP এর জন্য)');
     if (voterPassword.trim().length < 4) return showAlert('ত্রুটি', 'পাসওয়ার্ড কমপক্ষে ৪ অক্ষরের হতে হবে');
 
     const success = await addStudent(
@@ -247,10 +287,11 @@ export const AdminScreen: React.FC = () => {
       voterPassword.trim(),
       voterDepartment.trim() || 'N/A',
       voterSession.trim() || 'N/A',
+      voterPhoneNumber.trim(),
     );
 
     if (success) {
-      showAlert('সফল! ✅', `ভোটার "${voterName.trim()}" সফলভাবে যোগ করা হয়েছে।\n\nStudent ID: ${voterStudentId.trim()}\nPassword: ${voterPassword.trim()}`);
+      showAlert('সফল! ✅', `ভোটার "${voterName.trim()}" সফলভাবে যোগ করা হয়েছে।\n\nStudent ID: ${voterStudentId.trim()}\nPhone: ${voterPhoneNumber.trim()}`);
       resetVoterForm();
       await loadStudents();
     } else {
@@ -281,9 +322,10 @@ export const AdminScreen: React.FC = () => {
     );
   };
 
-  const openEditVoterModal = (student: { studentId: string; name: string; department: string; session: string }) => {
+  const openEditVoterModal = (student: { studentId: string; name: string; phoneNumber?: string; department: string; session: string }) => {
     setEditingVoter(student);
     setEditVoterName(student.name);
+    setEditVoterPhoneNumber(student.phoneNumber || '');
     setEditVoterDepartment(student.department);
     setEditVoterSession(student.session);
     setShowEditVoterModal(true);
@@ -298,6 +340,7 @@ export const AdminScreen: React.FC = () => {
       editVoterName.trim(),
       editVoterDepartment.trim() || 'N/A',
       editVoterSession.trim() || 'N/A',
+      editVoterPhoneNumber.trim(),
     );
 
     if (success) {
@@ -307,6 +350,113 @@ export const AdminScreen: React.FC = () => {
       await loadStudents();
     } else {
       showAlert('ব্যর্থ', 'আপডেট করতে সমস্যা হয়েছে।');
+    }
+  };
+
+  const openFaceModal = (student: { studentId: string; name: string }) => {
+    setSelectedVoterForFace(student);
+    setFaceCode('');
+    setConfirmFaceCode('');
+    setShowFaceModal(true);
+  };
+
+  const closeFaceModal = () => {
+    setShowFaceModal(false);
+    setSelectedVoterForFace(null);
+    setFaceCode('');
+    setConfirmFaceCode('');
+  };
+
+  const handleSaveFace = async () => {
+    if (!selectedVoterForFace) return;
+    if (!faceCode.trim() || !confirmFaceCode.trim()) {
+      showAlert('ত্রুটি', 'Face code এবং confirm code দিন।');
+      return;
+    }
+    if (faceCode.trim() !== confirmFaceCode.trim()) {
+      showAlert('ত্রুটি', 'দুইটি Face code মেলেনি।');
+      return;
+    }
+
+    setIsSavingFace(true);
+    const ok = await setStudentFace(selectedVoterForFace.studentId, faceCode.trim());
+    setIsSavingFace(false);
+
+    if (!ok) {
+      showAlert('ব্যর্থ', 'Face data save করা যায়নি।');
+      return;
+    }
+
+    setFaceStatus((prev) => ({ ...prev, [selectedVoterForFace.studentId]: true }));
+    showAlert('সফল ✅', `${selectedVoterForFace.name}-এর face data save হয়েছে।`);
+    closeFaceModal();
+  };
+
+  const handleClearFace = async (student: { studentId: string; name: string }) => {
+    const ok = await clearStudentFace(student.studentId);
+    if (!ok) {
+      showAlert('ব্যর্থ', 'Face data remove করতে সমস্যা হয়েছে।');
+      return;
+    }
+    setFaceStatus((prev) => ({ ...prev, [student.studentId]: false }));
+    showAlert('সফল', `${student.name}-এর face data remove করা হয়েছে।`);
+  };
+
+  const formatOtpTime = (iso?: string): string => {
+    if (!iso) return 'N/A';
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return 'N/A';
+    return d.toLocaleString();
+  };
+
+  const handleApproveOtp = async (studentId: string) => {
+    const otp = await approveVoteOtpRequest(studentId);
+    if (!otp) {
+      showAlert('ব্যর্থ', 'OTP approve করা যায়নি।');
+      return;
+    }
+    showAlert('Approved ✅', `OTP তৈরি হয়েছে: ${otp}`);
+  };
+
+  const handleRejectOtp = async (studentId: string) => {
+    const ok = await rejectVoteOtpRequest(studentId);
+    if (!ok) {
+      showAlert('ব্যর্থ', 'OTP request reject করা যায়নি।');
+      return;
+    }
+    showAlert('Rejected', 'OTP request reject করা হয়েছে।');
+  };
+
+  const handleClearOtpRequest = async (studentId: string) => {
+    const ok = await clearVoteOtpRequest(studentId);
+    if (!ok) {
+      showAlert('ব্যর্থ', 'OTP request clear করা যায়নি।');
+      return;
+    }
+    showAlert('সফল', 'OTP request clear করা হয়েছে।');
+  };
+
+  const handleSendManualSms = async (studentId: string, phoneNumber: string, otpCode?: string) => {
+    const trimmedPhone = phoneNumber.trim();
+    if (!trimmedPhone || !otpCode) {
+      showAlert('তথ্য অসম্পূর্ণ', 'Phone number বা OTP code পাওয়া যায়নি। আগে approve করুন।');
+      return;
+    }
+
+    const body = `JOKSU Vote OTP: ${otpCode}. Eta 5 minute valid.`;
+    const smsUrl = `sms:${trimmedPhone}?body=${encodeURIComponent(body)}`;
+
+    try {
+      const canOpen = await Linking.canOpenURL(smsUrl);
+      if (!canOpen) {
+        showAlert('SMS App পাওয়া যায়নি', `OTP code: ${otpCode}`);
+        return;
+      }
+      await Linking.openURL(smsUrl);
+      await markVoteOtpAsSent(studentId);
+    } catch (error) {
+      console.error('Error opening SMS app:', error);
+      showAlert('ত্রুটি', `SMS app খুলতে সমস্যা হয়েছে। OTP code: ${otpCode}`);
     }
   };
 
@@ -585,6 +735,75 @@ export const AdminScreen: React.FC = () => {
       {activeTab === 'voters' && (
         <ScrollView style={styles.scrollContent}>
           <View style={styles.section}>
+            <Text style={styles.sectionTitle}>🙂 Face Verification</Text>
+            <View style={styles.statusCard}>
+              <View style={styles.statusRow}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={styles.statusLabel}>ভোটের আগে Face match বাধ্যতামূলক</Text>
+                  <Text style={styles.formHint}>ID scan এর পর face match করলে তবেই ভোট দিতে পারবে।</Text>
+                </View>
+                <Switch
+                  value={faceRequired}
+                  onValueChange={setFaceRequired}
+                  trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
+                  thumbColor={faceRequired ? '#2563eb' : '#ffffff'}
+                />
+              </View>
+              <View style={[styles.statusRow, { marginTop: 12 }]}> 
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={styles.statusLabel}>📱 SMS OTP বাধ্যতামূলক</Text>
+                  <Text style={styles.formHint}>ভোটার request দিবে, admin approve করে manually SMS পাঠাবে, তারপর OTP verify হবে।</Text>
+                </View>
+                <Switch
+                  value={otpRequired}
+                  onValueChange={setOtpRequired}
+                  trackColor={{ false: '#d1d5db', true: '#93c5fd' }}
+                  thumbColor={otpRequired ? '#2563eb' : '#ffffff'}
+                />
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>📨 OTP Request Queue</Text>
+            <View style={styles.formCard}>
+              {otpRequests.length === 0 ? (
+                <Text style={styles.formHint}>এখনো কোনো OTP request আসেনি।</Text>
+              ) : (
+                otpRequests
+                  .slice()
+                  .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime())
+                  .map((request, idx) => (
+                    <View key={`${request.studentId}-${idx}`} style={styles.otpRequestCard}>
+                      <Text style={styles.otpRequestTitle}>{request.studentId}</Text>
+                      <Text style={styles.otpRequestMeta}>Phone: {request.phoneNumber || 'N/A'}</Text>
+                      <Text style={styles.otpRequestMeta}>Status: {request.status.toUpperCase()}</Text>
+                      <Text style={styles.otpRequestMeta}>Requested: {formatOtpTime(request.requestedAt)}</Text>
+                      <Text style={styles.otpRequestMeta}>Expires: {formatOtpTime(request.expiresAt)}</Text>
+                      {request.otpCode ? <Text style={styles.otpRequestCode}>OTP: {request.otpCode}</Text> : null}
+                      {!!request.note && <Text style={styles.otpRequestNote}>Note: {request.note}</Text>}
+
+                      <View style={styles.otpRequestActionsRow}>
+                        <TouchableOpacity style={styles.otpApproveBtn} onPress={() => handleApproveOtp(request.studentId)}>
+                          <Text style={styles.otpApproveBtnText}>Approve</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.otpSendBtn} onPress={() => handleSendManualSms(request.studentId, request.phoneNumber, request.otpCode)}>
+                          <Text style={styles.otpSendBtnText}>Send SMS</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.otpRejectBtn} onPress={() => handleRejectOtp(request.studentId)}>
+                          <Text style={styles.otpRejectBtnText}>Reject</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity style={styles.otpClearBtn} onPress={() => handleClearOtpRequest(request.studentId)}>
+                          <Text style={styles.otpClearBtnText}>Clear</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))
+              )}
+            </View>
+          </View>
+
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>🎓 নতুন ভোটার যোগ করুন</Text>
 
             <View style={styles.formCard}>
@@ -619,6 +838,16 @@ export const AdminScreen: React.FC = () => {
                 value={voterPassword}
                 onChangeText={setVoterPassword}
                 autoCapitalize="none"
+              />
+
+              <Text style={styles.formLabel}>Phone Number (OTP) *</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="যেমন: +8801XXXXXXXXX"
+                placeholderTextColor="#999"
+                value={voterPhoneNumber}
+                onChangeText={setVoterPhoneNumber}
+                keyboardType="phone-pad"
               />
 
               <Text style={styles.formLabel}>বিভাগ</Text>
@@ -662,9 +891,27 @@ export const AdminScreen: React.FC = () => {
                 <View style={styles.voterInfo}>
                   <Text style={styles.voterName}>{student.name}</Text>
                   <Text style={styles.voterMeta}>ID: {student.studentId}</Text>
+                  <Text style={styles.voterMeta}>Phone: {student.phoneNumber || 'N/A'}</Text>
                   <Text style={styles.voterMeta}>{student.department} • {student.session}</Text>
+                  <Text style={[styles.voterMeta, faceStatus[student.studentId] ? styles.faceOn : styles.faceOff]}>
+                    {faceStatus[student.studentId] ? '🙂 Face Enrolled' : '⚪ Face Not Set'}
+                  </Text>
                 </View>
                 <View style={styles.voterActions}>
+                  <TouchableOpacity
+                    style={styles.voterFaceBtn}
+                    onPress={() => openFaceModal(student)}
+                  >
+                    <Text style={styles.voterFaceText}>{faceStatus[student.studentId] ? 'Update Face' : 'Set Face'}</Text>
+                  </TouchableOpacity>
+                  {faceStatus[student.studentId] && (
+                    <TouchableOpacity
+                      style={styles.voterFaceRemoveBtn}
+                      onPress={() => handleClearFace(student)}
+                    >
+                      <Text style={styles.voterFaceRemoveText}>Remove</Text>
+                    </TouchableOpacity>
+                  )}
                   <TouchableOpacity
                     style={styles.voterEditBtn}
                     onPress={() => openEditVoterModal(student)}
@@ -845,6 +1092,62 @@ export const AdminScreen: React.FC = () => {
         </TouchableOpacity>
       </Modal>
 
+      {/* ====================== FACE SETUP MODAL ====================== */}
+      <Modal visible={showFaceModal} animationType="fade" transparent onRequestClose={closeFaceModal}>
+        <View style={styles.editOverlay}>
+          <View style={styles.editContainer}>
+            <ScrollView>
+              <Text style={styles.editTitle}>🙂 Face সেটআপ</Text>
+              <Text style={{ textAlign: 'center', color: '#777', marginBottom: 10, fontSize: 13 }}>
+                {selectedVoterForFace?.name} ({selectedVoterForFace?.studentId})
+              </Text>
+
+              <Text style={styles.formLabel}>Face Code *</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="Face code"
+                placeholderTextColor="#999"
+                value={faceCode}
+                onChangeText={setFaceCode}
+                secureTextEntry
+              />
+
+              <TouchableOpacity style={styles.faceCaptureBtn} onPress={() => setShowCameraFaceCapture(true)}>
+                <Text style={styles.faceCaptureText}>📷 Camera দিয়ে Face নিন (Demo)</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.formLabel}>Confirm Code *</Text>
+              <TextInput
+                style={styles.formInput}
+                placeholder="একই code আবার লিখুন"
+                placeholderTextColor="#999"
+                value={confirmFaceCode}
+                onChangeText={setConfirmFaceCode}
+                secureTextEntry
+              />
+
+              <View style={styles.editButtons}>
+                <TouchableOpacity style={styles.editCancelBtn} onPress={closeFaceModal}>
+                  <Text style={styles.editCancelText}>বাতিল</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.editSaveBtn} onPress={handleSaveFace} disabled={isSavingFace}>
+                  {isSavingFace ? <ActivityIndicator color="#fff" /> : <Text style={styles.editSaveText}>সংরক্ষণ</Text>}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      <CameraFaceCapture
+        visible={showCameraFaceCapture}
+        onClose={() => setShowCameraFaceCapture(false)}
+        onTemplateReady={(templateCode) => {
+          setFaceCode(templateCode);
+          setConfirmFaceCode(templateCode);
+        }}
+      />
+
       {/* ====================== EDIT VOTER MODAL ====================== */}
       <Modal visible={showEditVoterModal} animationType="slide" transparent>
         <View style={styles.editOverlay}>
@@ -862,6 +1165,14 @@ export const AdminScreen: React.FC = () => {
 
               <Text style={styles.formLabel}>বিভাগ</Text>
               <TextInput style={styles.formInput} value={editVoterDepartment} onChangeText={setEditVoterDepartment} />
+
+              <Text style={styles.formLabel}>Phone Number (OTP)</Text>
+              <TextInput
+                style={styles.formInput}
+                value={editVoterPhoneNumber}
+                onChangeText={setEditVoterPhoneNumber}
+                keyboardType="phone-pad"
+              />
 
               <Text style={styles.formLabel}>সেশন</Text>
               <TextInput style={styles.formInput} value={editVoterSession} onChangeText={setEditVoterSession} />
@@ -1468,6 +1779,38 @@ const styles = StyleSheet.create({
     color: '#777',
     marginTop: 1,
   },
+  faceOn: {
+    color: '#0284c7',
+    fontWeight: '700',
+  },
+  faceOff: {
+    color: '#9ca3af',
+    fontWeight: '700',
+  },
+  voterFaceBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(37,99,235,0.12)',
+    marginRight: 8,
+  },
+  voterFaceText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#1d4ed8',
+  },
+  voterFaceRemoveBtn: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: 'rgba(220,38,38,0.12)',
+    marginRight: 8,
+  },
+  voterFaceRemoveText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#b91c1c',
+  },
   voterDeleteBtn: {
     padding: 10,
   },
@@ -1483,5 +1826,109 @@ const styles = StyleSheet.create({
   voterActions: {
     flexDirection: 'row',
     alignItems: 'center',
+  },
+  faceCaptureBtn: {
+    marginTop: 10,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#c7d2fe',
+    backgroundColor: '#eef2ff',
+    borderRadius: 10,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  faceCaptureText: {
+    fontSize: 13,
+    color: '#3730a3',
+    fontWeight: '700',
+  },
+  otpRequestCard: {
+    borderWidth: 1,
+    borderColor: '#e5e7eb',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 10,
+    backgroundColor: '#fff',
+  },
+  otpRequestTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 4,
+  },
+  otpRequestMeta: {
+    fontSize: 12,
+    color: '#4b5563',
+    marginBottom: 2,
+  },
+  otpRequestCode: {
+    marginTop: 6,
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#111827',
+  },
+  otpRequestNote: {
+    marginTop: 4,
+    fontSize: 12,
+    color: '#b91c1c',
+    fontStyle: 'italic',
+  },
+  otpRequestActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 10,
+  },
+  otpApproveBtn: {
+    backgroundColor: '#ecfdf5',
+    borderColor: '#10b981',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  otpApproveBtnText: {
+    color: '#047857',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  otpSendBtn: {
+    backgroundColor: '#eff6ff',
+    borderColor: '#3b82f6',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  otpSendBtnText: {
+    color: '#1d4ed8',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  otpRejectBtn: {
+    backgroundColor: '#fef2f2',
+    borderColor: '#ef4444',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  otpRejectBtnText: {
+    color: '#b91c1c',
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  otpClearBtn: {
+    backgroundColor: '#f3f4f6',
+    borderColor: '#9ca3af',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  otpClearBtnText: {
+    color: '#374151',
+    fontWeight: '700',
+    fontSize: 12,
   },
 });

@@ -27,8 +27,9 @@ export const IDCardScanner: React.FC<IDCardScannerProps> = ({
   const [scanned, setScanned] = useState(false);
   const [scanSuccess, setScanSuccess] = useState(false);
   const [scannedValue, setScannedValue] = useState('');
+  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
 
-  // Reset state when modal opens
+  // Reset state when modal opens or closes
   React.useEffect(() => {
     if (visible) {
       setScanned(false);
@@ -37,7 +38,20 @@ export const IDCardScanner: React.FC<IDCardScannerProps> = ({
       if (!permission?.granted) {
         requestPermission();
       }
+    } else {
+      // Clear any pending timeout when modal closes
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+        timeoutRef.current = null;
+      }
     }
+    
+    return () => {
+      // Cleanup timeout on unmount
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current);
+      }
+    };
   }, [visible]);
 
   const extractStudentId = (data: string): string => {
@@ -77,9 +91,10 @@ export const IDCardScanner: React.FC<IDCardScannerProps> = ({
     setScannedValue(extractedId);
     setScanSuccess(true);
 
-    // Short delay to show success feedback
-    setTimeout(() => {
+    // Short delay to show success feedback before calling parent callback
+    timeoutRef.current = setTimeout(() => {
       onScanSuccess(extractedId);
+      timeoutRef.current = null;
     }, 800);
   };
 
